@@ -1,24 +1,12 @@
 {
-  "version": 2,
-  "routes": [
+  "rewrites": [
     {
-      "src": "/",
-      "dest": "/index.html"
+      "source": "/",
+      "destination": "/index.html"
     },
     {
-      "src": "/mobile_logo",
-      "dest": "/mobile_logo.html"
+      "source": "/mobile_logo",
+      "destination": "/mobile_logo.html"
     }
-  ],
-  "ignore": [
-    "app.py",
-    "api.py",
-    "*.py",
-    "requirements.txt",
-    "Procfile",
-    "serviceAccountKey.json",
-    "pose_landmarker.task",
-    ".venv/**",
-    "venv/**"
   ]
 }
