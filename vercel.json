@@ -13,10 +13,6 @@
       "dest": "/index.html"
     },
     {
-      "src": "/react",
-      "dest": "/react.html"
-    },
-    {
       "src": "/mobile_logo",
       "dest": "/mobile_logo.html"
     }
@@ -24,6 +20,12 @@
   "ignore": [
     "app.py",
     "api.py",
-    "*.py"
+    "*.py",
+    "requirements.txt",
+    "Procfile",
+    "serviceAccountKey.json",
+    "pose_landmarker.task",
+    ".venv/**",
+    "venv/**"
   ]
 }
