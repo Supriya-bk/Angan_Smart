@@ -1,22 +1,29 @@
-﻿{
+{
   "version": 2,
   "public": true,
-
-  /* Serve everything that lives inside the rontend/ folder */
   "builds": [
-    { "src": "frontend/**", "use": "@vercel/static" }
+    {
+      "src": "**/*",
+      "use": "@vercel/static"
+    }
   ],
-
-  /* Map any request to the matching file in rontend/ */
   "routes": [
-    { "src": "/(.*)", "dest": "/frontend/" }
+    {
+      "src": "/",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/react",
+      "dest": "/react.html"
+    },
+    {
+      "src": "/mobile_logo",
+      "dest": "/mobile_logo.html"
+    }
   ],
-
-  /* When a request is exactly /, return the main page */
-  "rewrites": [
-    { "source": "/", "destination": "/frontend/index.html" }
-  ],
-
-  /* Tell Vercel that the final output lives in rontend/ */
-  "outputDirectory": "frontend"
+  "ignore": [
+    "app.py",
+    "api.py",
+    "*.py"
+  ]
 }
