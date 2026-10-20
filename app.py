@@ -6,6 +6,8 @@ import io
 import json
 import re
 import uuid
+import secrets
+import time
 try:
     import qrcode
 except ModuleNotFoundError:
@@ -455,6 +457,10 @@ def login_page():
         st.session_state.otp_mobile = ""
     if 'otp_code' not in st.session_state:
         st.session_state.otp_code = ""
+    if 'otp_expires_at' not in st.session_state:
+        st.session_state.otp_expires_at = 0.0
+    if 'otp_attempts' not in st.session_state:
+        st.session_state.otp_attempts = 0
 
     if st.session_state.reset_mode:
         st.markdown('<p class="login-hint">Reset your password using username, email, or mobile number.</p>', unsafe_allow_html=True)
@@ -510,28 +516,65 @@ def login_page():
                     elif normalize_mobile(mobile_number) != normalize_mobile(profile["mobile"]):
                         st.error("Mobile number does not match our records.")
                     else:
-                        otp = str(uuid.uuid4().int)[:6]
+                        # Demo-only OTP: no SMS is sent and no paid SMS provider is needed.
+                        otp = f"{secrets.randbelow(1_000_000):06d}"
                         st.session_state.otp_mobile = normalize_mobile(mobile_number)
                         st.session_state.otp_code = otp
+                        st.session_state.otp_expires_at = time.time() + 300  # 5 minutes
+                        st.session_state.otp_attempts = 0
                         st.session_state.otp_sent = True
-                        st.success(f"OTP sent to {profile['mobile']} (demo mode: {otp})")
+                        st.success("Demo OTP generated successfully. No SMS was sent.")
 
             if st.session_state.otp_sent:
-                with st.form(key="otp_verify_form"):
-                    otp_input = st.text_input("Enter OTP", key="otp_input")
-                    verify_otp = st.form_submit_button("Verify OTP")
-                    if verify_otp:
-                        if otp_input == st.session_state.otp_code:
-                            user_key, _ = find_user(st.session_state.otp_mobile)
-                            st.session_state.logged_in = True
-                            st.session_state.current_user = user_key
-                            st.session_state.otp_sent = False
-                            st.session_state.otp_code = ""
-                            st.session_state.otp_mobile = ""
-                            st.success("OTP verified. Login successful!")
-                            st.rerun()
-                        else:
-                            st.error("Invalid OTP. Please try again.")
+                remaining_seconds = int(st.session_state.otp_expires_at - time.time())
+                if remaining_seconds <= 0:
+                    st.session_state.otp_sent = False
+                    st.session_state.otp_code = ""
+                    st.session_state.otp_mobile = ""
+                    st.session_state.otp_expires_at = 0.0
+                    st.session_state.otp_attempts = 0
+                    st.warning("Your demo OTP has expired. Please click Send OTP to generate a new one.")
+                else:
+                    st.info("🧪 **DEMO MODE — OTP for presentation**")
+                    st.code(st.session_state.otp_code, language=None)
+                    st.caption(f"This demo OTP expires in about {remaining_seconds // 60} min {remaining_seconds % 60} sec. It is displayed here only; no real SMS is sent.")
+                    with st.form(key="otp_verify_form"):
+                        otp_input = st.text_input("Enter the 6-digit OTP", key="otp_input", max_chars=6)
+                        verify_otp = st.form_submit_button("Verify OTP")
+                        if verify_otp:
+                            if time.time() >= st.session_state.otp_expires_at:
+                                st.session_state.otp_sent = False
+                                st.session_state.otp_code = ""
+                                st.session_state.otp_mobile = ""
+                                st.session_state.otp_expires_at = 0.0
+                                st.session_state.otp_attempts = 0
+                                st.error("Your OTP has expired. Please click Send OTP to generate a new one.")
+                            elif st.session_state.otp_attempts >= 5:
+                                st.session_state.otp_sent = False
+                                st.session_state.otp_code = ""
+                                st.session_state.otp_mobile = ""
+                                st.session_state.otp_expires_at = 0.0
+                                st.session_state.otp_attempts = 0
+                                st.error("Too many incorrect attempts. Please generate a new OTP.")
+                            elif secrets.compare_digest(otp_input.strip(), st.session_state.otp_code):
+                                user_key, _ = find_user(st.session_state.otp_mobile)
+                                if user_key:
+                                    st.session_state.logged_in = True
+                                    st.session_state.current_user = user_key
+                                st.session_state.otp_sent = False
+                                st.session_state.otp_code = ""
+                                st.session_state.otp_mobile = ""
+                                st.session_state.otp_expires_at = 0.0
+                                st.session_state.otp_attempts = 0
+                                if user_key:
+                                    st.success("OTP verified. Login successful!")
+                                    st.rerun()
+                                else:
+                                    st.error("Could not find the account for this mobile number. Please try again.")
+                            else:
+                                st.session_state.otp_attempts += 1
+                                attempts_left = 5 - st.session_state.otp_attempts
+                                st.error(f"Invalid OTP. {attempts_left} attempt(s) remaining.")
 
         st.markdown('</div>', unsafe_allow_html=True)
         if st.button("Forgot Password?"):
@@ -756,9 +799,9 @@ if page == T["home"]:
         st.markdown("---")
         st.subheader("👧 " + ("Children Records" if lang=="English" else "Kuzhandaiyin Padhivukal" if lang=="Tanglish" else "குழந்தைகள் பதிவுகள்"))
         df_children = pd.DataFrame(st.session_state.children)
-        st.dataframe(df_children[["name","age","height","weight","anemia"]],width='stretch')
+        st.dataframe(df_children[["name","age","height","weight","anemia"]],use_container_width=True)
         for idx, child in enumerate(st.session_state.children):
-            c1,c2,c3 = st.columns([3,1,1])
+            c1,c2,c3 = st.columns([2,1,1])
             c1.markdown(f"**{child['name']}** — {child['age']}m, {child['height']}cm, {child['weight']}kg, {child['anemia']}")
             if c2.button("✏️ " + ("Edit" if lang=="English" else "Edit" if lang=="Tanglish" else "திருத்து"), key=f"edit_child_{idx}"):
                 st.session_state.edit_child_index = idx
@@ -972,7 +1015,7 @@ elif page == T["sos"]:
         if st.button(f"🔊 {T['voice_btn']}", key="sos_voice"):
             speak_text(T['motivation'], voice_lang)
 
-        if st.button(T["send_sos"], type="primary",width='stretch'):
+        if st.button(T["send_sos"], type="primary",use_container_width=True):
             st.session_state.sos_active = True
             st.rerun()
 
@@ -1199,7 +1242,7 @@ elif page == T["inventory"]:
         })
     df_inv = pd.DataFrame(rows)
     st.subheader("📦 " + ("Live Stock Status" if lang=="English" else "Live Sarakku Nilai" if lang=="Tanglish" else "நேரடி சரக்கு நிலை"))
-    st.dataframe(df_inv, width='stretch')
+    st.dataframe(df_inv, use_container_width=True)
 
     # ── Auto Alerts ──
     st.markdown("---")
@@ -1250,7 +1293,7 @@ elif page == T["inventory"]:
 
         submitted = st.form_submit_button(
             "✅ Save Entry" if lang=="English" else "✅ Padhivu Seyyavum" if lang=="Tanglish" else "✅ பதிவு செய்யவும்",
-            type="primary", width='stretch'
+            type="primary", use_container_width=True
         )
 
         if submitted:
@@ -1474,7 +1517,8 @@ elif page == T["passport"]:
             qr      = qrcode.QRCode(version=1, box_size=8, border=4)
             qr.add_data(qr_data); qr.make(fit=True)
             buf = io.BytesIO()
-            qr.make_image(fill_color="black", back_color="white").save(buf, format="PNG")
+            img = qr.make_image(fill_color="black", back_color="white")
+            img.save(buf)
             buf.seek(0)
             st.image(buf.getvalue(), width=220)
             st.success(f"✅ ID: **{cid}**")
@@ -1616,7 +1660,7 @@ elif page == T["attendance"]:
     if view_key in st.session_state.attendance_log:
         records = st.session_state.attendance_log[view_key]
         df_view = pd.DataFrame({"Child": list(records.keys()), "Present": ["Yes" if v else "No" for v in records.values()]})
-        st.dataframe(df_view,width='stretch')
+        st.dataframe(df_view,use_container_width=True)
         present = sum(records.values())
         absent = len(records) - present
         st.info(f"✅ Present: {present}   ❌ Absent: {absent}")
@@ -1673,7 +1717,7 @@ elif page == T["district"]:
         "center":"Center","block":"Block","children":"Children",
         "green":"🟢 Green","yellow":"🟡 Yellow","red":"🔴 Red",
         "mothers":"Mothers","anemia_high":"Anemia High Risk"
-    }),width='stretch')
+    }),use_container_width=True)
 
     st.markdown("---")
     st.subheader("🚨 " + ("Centers Needing Urgent Attention" if lang=="English" else "Avasara Kavanam Thevaippaduvana Maiyangal" if lang=="Tanglish" else "அவசர கவனம் தேவைப்படும் மையங்கள்"))
@@ -2046,3 +2090,72 @@ elif page == T["podcast"]:
                 st.info(f"📄 {'Documents needed' if lang=='English' else 'Thevaiyaana Aavangal' if lang=='Tanglish' else 'தேவையான ஆவணங்கள்'}: {docs}")
                 if st.button(f"🔊 {'Listen' if lang=='English' else 'கேளுங்கள்' if lang=='தமிழ்' else 'Kelungal'}", key=f"scheme_{key}"):
                     speak_text(f"{full_name}. {desc}", voice_lang)
+
+
+                    import os
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+# ---------- Firebase Admin init ----------
+# Convert the escaped \n back to real newlines (required for Render)
+_priv_key = os.getenv("FIREBASE_PRIVATE_KEY")
+if _priv_key:
+    _priv_key = _priv_key.replace("\\n", "\n")
+
+admin_cred = credentials.Certificate({
+    "type": "service_account",
+    "project_id": os.getenv("FIREBASE_PROJECT_ID"),
+    "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
+    "private_key": _priv_key,
+    "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
+    "client_id": "unused",          # optional, can be omitted
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{os.getenv('FIREBASE_CLIENT_EMAIL')}",
+})
+
+firebase_admin.initialize_app(admin_cred)
+db = firestore.client()   # now you can use `db.collection('your_collection')` etc.
+# -----------------------------------------
+# -------------------------------------------------
+#  Firebase sanity‑check utilities (local dev only)
+# -------------------------------------------------
+import streamlit as st
+from firebase_admin import firestore
+
+def _firestore_status():
+    """
+    Returns a dict with three keys:
+        collections  – list of collection names (or error)
+        write_read   – bool indicating write‑read round‑trip succeeded
+        error        – any exception message (None if all good)
+    """
+    result = {"collections": [], "write_read": False, "error": None}
+    try:
+        # 1️⃣  List collections
+        result["collections"] = [c.id for c in db.collections()]
+
+        # 2️⃣  Write‑read test
+        test_ref = db.collection("firestore_test").document("demo")
+        test_ref.set({"ping": "pong", "ts": firestore.SERVER_TIMESTAMP})
+        doc = test_ref.get()
+        result["write_read"] = doc.exists and doc.to_dict().get("ping") == "pong"
+
+        # Clean up (optional – keep the collection for future runs)
+        test_ref.delete()
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
+
+# -------------------------------------------------
+#  Streamlit UI – show the sanity check at the top
+# -------------------------------------------------
+if st.sidebar.button("🔧 Check Firebase connection"):
+    status = _firestore_status()
+    if status["error"]:
+        st.sidebar.error(f"❌ Firebase error: {status['error']}")
+    else:
+        st.sidebar.success("✅ Firebase admin SDK is alive")
+        st.sidebar.write("Collections:", status["collections"])
+        st.sidebar.write("Write‑read test:", "✅ OK" if status["write_read"] else "❌ Failed")
