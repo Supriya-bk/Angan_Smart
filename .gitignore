@@ -4,12 +4,14 @@ venv/
 env/
 ENV/
 
-# Python
+# Python compiled files
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+
+#Build / distribution
 build/
 develop-eggs/
 dist/
@@ -39,7 +41,8 @@ Thumbs.db
 
 # Credentials & Secrets
 serviceAccountKey.json
-*.env
+.env
+.env.*
 .env.local
 .env.*.local
 
@@ -63,3 +66,4 @@ pose_landmarker.task
 # Temporary files
 tmp_*.py
 *.html (except if needed)
+
